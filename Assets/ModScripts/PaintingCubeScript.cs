@@ -38,7 +38,9 @@ public class PaintingCubeScript : MonoBehaviour {
 		Left
 	}
 
-	private int currentCubePos, currentDownFace = 5;
+	private int currentCubePos;
+
+	private int[] cubeFaceIxes;
 
 	private Coroutine cubeMoving;
 
@@ -88,7 +90,13 @@ public class PaintingCubeScript : MonoBehaviour {
 
 	private static readonly Color32 gridBorderColor = new Color32(141, 159, 194, 255);
 
-	private static int Mod(int n, int m) => (n % m + m) % m;
+	private static readonly int[][] cubeOrientationTable =
+	{
+		new[] { 1, 5, 2, 0, 4, 3 },
+		new[] { 4, 1, 0, 3, 5, 2 },
+		new[] { 3, 0, 2, 5, 4, 1 },
+		new[] { 2, 1, 5, 3, 0, 4 }
+	};
 
 	void Awake()
     {
@@ -127,6 +135,8 @@ public class PaintingCubeScript : MonoBehaviour {
 		SetGrid();
 		SetCube();
 
+		cubeFaceIxes = Enumerable.Range(0, 6).ToArray();
+
 		currentCubePos = Enumerable.Range(0, 16).Where(x => !randomColorPlacementIxes.Contains(x)).PickRandom();
 		validDirections = GetValidDirections(currentCubePos);
 		cube.localPosition = ObtainGridPos(currentCubePos);
@@ -149,7 +159,7 @@ public class PaintingCubeScript : MonoBehaviour {
 			cubeFaceRenders[i].material.color = cubeFaces[i]?.MatColor ?? Color.white;
 			cubeFaceRenders[i].GetComponentInChildren<TextMesh>().text = cbActive ? cubeFaces[i]?.Color.ToString()[0].ToString() ?? string.Empty : string.Empty;
 
-			if (cubeFaces[i] == null)
+			if (cubeFaces[i] == null || !cbActive)
 				continue;
 
 			var faceColor = cubeFaces[i].Color;
@@ -183,29 +193,43 @@ public class PaintingCubeScript : MonoBehaviour {
 			new[] { Vector3.left, Vector3.forward }
 		};
 
+		var copiedOrientation = cubeFaceIxes.ToArray();
+
 		var rotSet = axis[(int)dir.Direction];
 
 		var startPos = cube.localPosition;
 		var startRot = cube.localRotation;
 		var rotPoint = startPos + (rotSet[0] + Vector3.down) / 2 * 0.03f;
 
-		while (elapsed < duration)
+		if (grid[currentCubePos] != null && cubeFaces[cubeFaceIxes[5]] == null)
 		{
-			yield return null;
-			elapsed += Time.deltaTime;
-			var t = Easing.InOutSine(Mathf.Min(elapsed, duration), 0, 1, duration);
-			cube.localRotation = Quaternion.AngleAxis(90 * t, rotSet[1]) * startRot;
-			cube.localPosition = RotatePointAroundPivot(startPos, rotPoint, Quaternion.AngleAxis(90 * t, rotSet[1]));
+			cubeFaces[cubeFaceIxes[5]] = grid[currentCubePos];
+			grid[currentCubePos] = null;
+		}
+		else if (grid[currentCubePos] == null && cubeFaces[cubeFaceIxes[5]] != null)
+		{
+			grid[currentCubePos] = cubeFaces[cubeFaceIxes[5]];
+			cubeFaces[cubeFaceIxes[5]] = null;
 		}
 
-		Audio.PlaySoundAtTransform("Block", transform);
+		SetGrid();
+		SetCube();
 
+        while (elapsed < duration)
+        {
+            yield return null;
+            elapsed += Time.deltaTime;
+            var t = Easing.InOutSine(Mathf.Min(elapsed, duration), 0, 1, duration);
+            cube.localRotation = Quaternion.AngleAxis(90 * t, rotSet[1]) * startRot;
+            cube.localPosition = RotatePointAroundPivot(startPos, rotPoint, Quaternion.AngleAxis(90 * t, rotSet[1]));
+        }
 
-		var faceOffsets = new[] { -2, -3, -4, -1 };
+        Audio.PlaySoundAtTransform("Block", transform);
+
+		cubeFaceIxes = cubeOrientationTable[(int)dir.Direction].Select(x => copiedOrientation[x]).ToArray();
 
 		currentCubePos = dir.Position;
 		validDirections = GetValidDirections(currentCubePos);
-		currentDownFace = Mod(currentDownFace + faceOffsets[(int)dir.Direction], 6);
 		cubeMoving = null;
 	}
 
