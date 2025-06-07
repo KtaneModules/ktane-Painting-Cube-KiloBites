@@ -1,0 +1,236 @@
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using KModkit;
+using static UnityEngine.Random;
+using static UnityEngine.Debug;
+
+public class PaintingCubeScript : MonoBehaviour {
+
+	public KMBombInfo Bomb;
+	public KMAudio Audio;
+	public KMBombModule Module;
+	public KMColorblindMode Colorblind;
+
+	public KMSelectable[] gridButtons;
+
+	public Transform cube;
+	public MeshRenderer[] cubeFaceRenders;
+
+	static int moduleIdCounter = 1;
+	int moduleId;
+	private bool moduleSolved;
+
+	private bool cbActive;
+
+	private ColorInfo[] grid = new ColorInfo[16];
+    private ColorInfo[] cubeFaces = new ColorInfo[6];
+	private List<PCColor> netColors;
+	private PCColor missingColor;
+
+	private enum Direction
+	{
+		Up,
+		Right,
+		Down,
+		Left
+	}
+
+	private int currentCubePos, currentDownFace = 5;
+
+	private Coroutine cubeMoving;
+
+	private class DirectionInfo
+	{
+		public Direction Direction { get; private set; }
+		public int Position { get; private set; }
+
+        public DirectionInfo(Direction direction, int position)
+        {
+            Direction = direction;
+            Position = position;
+        }
+
+		public override string ToString() => $"{"ABCD"[Position % 4]}{(Position / 4) + 1}";
+    }
+
+	private DirectionInfo[] GetValidDirections(int cubePos)
+	{
+
+		var row = cubePos / 4;
+		var col = cubePos % 4;
+
+		var adj = new[]
+		{
+			row - 1,
+			col + 1,
+			row + 1,
+			col - 1
+		};
+
+		return adj.Select((x, i) => x < 0 || x > 3 ? null : new DirectionInfo((Direction)i, ((i % 2 != 0 ? row : x) * 4) + (i % 2 == 0 ? col : x))).ToArray();
+	}
+
+	private DirectionInfo[] validDirections;
+
+	private static readonly Color[] faceColors =
+	{
+		Color.red,
+		new Color(1, 0.5f, 0),
+		new Color(1, 1, 0),
+		Color.green,
+		Color.blue,
+		new Color(0, 0, 0.5f),
+		new Color(0.5f, 0, 0.5f)
+	};
+
+	private static readonly Color32 gridBorderColor = new Color32(141, 159, 194, 255);
+
+	private static int Mod(int n, int m) => (n % m + m) % m;
+
+	void Awake()
+    {
+
+		moduleId = moduleIdCounter++;
+
+		foreach (KMSelectable button in gridButtons)
+			button.OnInteract += delegate () { GridButtonPress(button); return false; };
+
+		cbActive = Colorblind.ColorblindModeActive;
+
+    }
+
+	private Vector3 ObtainGridPos(int cubePos)
+	{
+		var unmodified = gridButtons[cubePos].transform.localPosition;
+
+		return new Vector3(unmodified.x, 0.01f, unmodified.z);
+	}
+
+	private static Vector3 RotatePointAroundPivot(Vector3 point, Vector3 pivot, Quaternion rotation) => rotation * (point - pivot) + pivot;
+
+	
+	void Start()
+    {
+		var randomColorPlacementIxes = Enumerable.Range(0, 16).ToList().Shuffle().Take(6).ToArray();
+
+		netColors = Enumerable.Range(0, 7).Select(x => (PCColor)x).ToList();
+		missingColor = (PCColor)Range(0, 7);
+
+		netColors.RemoveAt((int)missingColor);
+
+		for (int i = 0; i < 6; i++)
+			grid[randomColorPlacementIxes[i]] = new ColorInfo(netColors[i], faceColors[(int)netColors[i]]);
+
+		SetGrid();
+		SetCube();
+
+		currentCubePos = Enumerable.Range(0, 16).Where(x => !randomColorPlacementIxes.Contains(x)).PickRandom();
+		validDirections = GetValidDirections(currentCubePos);
+		cube.localPosition = ObtainGridPos(currentCubePos);
+    }
+
+	void SetGrid()
+	{
+		for (int i = 0; i < 16; i++)
+		{
+            gridButtons[i].GetComponent<MeshRenderer>().material.color = grid[i]?.MatColor ?? gridBorderColor;
+			gridButtons[i].GetComponentInChildren<TextMesh>().text = cbActive ? grid[i]?.Color.ToString()[0].ToString() ?? string.Empty : string.Empty;
+        }
+			
+	}
+
+	void SetCube()
+	{
+		for (int i = 0; i < 6; i++)
+		{
+			cubeFaceRenders[i].material.color = cubeFaces[i]?.MatColor ?? Color.white;
+			cubeFaceRenders[i].GetComponentInChildren<TextMesh>().text = cbActive ? cubeFaces[i]?.Color.ToString()[0].ToString() ?? string.Empty : string.Empty;
+
+			if (cubeFaces[i] == null)
+				continue;
+
+			var faceColor = cubeFaces[i].Color;
+
+			cubeFaceRenders[i].GetComponentInChildren<TextMesh>().color = Enumerable.Range(0, 4).Any(x => (PCColor)x == faceColor) ? Color.black : Color.white;
+		}
+	}
+
+	void GridButtonPress(KMSelectable button)
+	{
+        var ix = Array.IndexOf(gridButtons, button);
+
+        if (moduleSolved || cubeMoving != null || validDirections.All(x => x?.Position != ix))
+			return;
+
+		var movingIx = validDirections.IndexOf(x => x?.Position == ix);
+
+		cubeMoving = StartCoroutine(MoveCube(validDirections[movingIx]));
+	}
+
+	IEnumerator MoveCube(DirectionInfo dir)
+	{
+		var duration = 0.25f;
+		var elapsed = 0f;
+
+		var axis = new[]
+		{
+			new[] { Vector3.forward, Vector3.right },
+			new[] { Vector3.right, Vector3.back },
+			new[] { Vector3.back, Vector3.left },
+			new[] { Vector3.left, Vector3.forward }
+		};
+
+		var rotSet = axis[(int)dir.Direction];
+
+		var startPos = cube.localPosition;
+		var startRot = cube.localRotation;
+		var rotPoint = startPos + (rotSet[0] + Vector3.down) / 2 * 0.03f;
+
+		while (elapsed < duration)
+		{
+			yield return null;
+			elapsed += Time.deltaTime;
+			var t = Easing.InOutSine(Mathf.Min(elapsed, duration), 0, 1, duration);
+			cube.localRotation = Quaternion.AngleAxis(90 * t, rotSet[1]) * startRot;
+			cube.localPosition = RotatePointAroundPivot(startPos, rotPoint, Quaternion.AngleAxis(90 * t, rotSet[1]));
+		}
+
+		Audio.PlaySoundAtTransform("Block", transform);
+
+
+		var faceOffsets = new[] { -2, -3, -4, -1 };
+
+		currentCubePos = dir.Position;
+		validDirections = GetValidDirections(currentCubePos);
+		currentDownFace = Mod(currentDownFace + faceOffsets[(int)dir.Direction], 6);
+		cubeMoving = null;
+	}
+
+	// Twitch Plays
+
+
+#pragma warning disable 414
+	private readonly string TwitchHelpMessage = @"!{0} something";
+#pragma warning restore 414
+
+	IEnumerator ProcessTwitchCommand(string command)
+    {
+		string[] split = command.ToUpperInvariant().Split(new[] { " " }, StringSplitOptions.RemoveEmptyEntries);
+		yield return null;
+    }
+
+	IEnumerator TwitchHandleForcedSolve()
+    {
+		yield return null;
+    }
+
+
+}
+
+
+
+
+
