@@ -15,6 +15,7 @@ public class PaintingCubeScript : MonoBehaviour {
 	public KMColorblindMode Colorblind;
 
 	public KMSelectable[] gridButtons;
+	public KMSelectable reset;
 
 	public Transform cube;
 	public MeshRenderer[] cubeFaceRenders;
@@ -25,57 +26,22 @@ public class PaintingCubeScript : MonoBehaviour {
 
 	private bool cbActive;
 
-	private ColorInfo[] grid = new ColorInfo[16];
-    private ColorInfo[] cubeFaces = new ColorInfo[6];
+	private ColorInfo[] grid = new ColorInfo[16], initialGrid;
+    private readonly ColorInfo[] cubeFaces = new ColorInfo[6];
 	private List<PCColor> netColors;
 	private PCColor missingColor;
 
-	private enum Direction
-	{
-		Up,
-		Right,
-		Down,
-		Left
-	}
 
-	private int currentCubePos;
+
+	private int currentCubePos, startingCubePos;
 
 	private int[] cubeFaceIxes;
 
 	private Coroutine cubeMoving;
 
-	private class DirectionInfo
-	{
-		public Direction Direction { get; private set; }
-		public int Position { get; private set; }
-
-        public DirectionInfo(Direction direction, int position)
-        {
-            Direction = direction;
-            Position = position;
-        }
-
-		public override string ToString() => $"{"ABCD"[Position % 4]}{(Position / 4) + 1}";
-    }
-
-	private DirectionInfo[] GetValidDirections(int cubePos)
-	{
-
-		var row = cubePos / 4;
-		var col = cubePos % 4;
-
-		var adj = new[]
-		{
-			row - 1,
-			col + 1,
-			row + 1,
-			col - 1
-		};
-
-		return adj.Select((x, i) => x < 0 || x > 3 ? null : new DirectionInfo((Direction)i, ((i % 2 != 0 ? row : x) * 4) + (i % 2 == 0 ? col : x))).ToArray();
-	}
-
 	private DirectionInfo[] validDirections;
+
+	private PaintingCubePuzzle puzzle;
 
 	private static readonly Color[] faceColors =
 	{
@@ -98,6 +64,16 @@ public class PaintingCubeScript : MonoBehaviour {
 		new[] { 2, 1, 5, 3, 0, 4 }
 	};
 
+	private Vector3 ObtainGridPos(int cubePos)
+	{
+		var unmodified = gridButtons[cubePos].transform.localPosition;
+	
+		return new Vector3(unmodified.x, 0.01f, unmodified.z);
+	}
+	
+	private static Vector3 RotatePointAroundPivot(Vector3 point, Vector3 pivot, Quaternion rotation) => rotation * (point - pivot) + pivot;
+
+
 	void Awake()
     {
 
@@ -106,39 +82,31 @@ public class PaintingCubeScript : MonoBehaviour {
 		foreach (KMSelectable button in gridButtons)
 			button.OnInteract += delegate () { GridButtonPress(button); return false; };
 
+		reset.OnInteract += delegate () { ResetPress(); return false; };
+
 		cbActive = Colorblind.ColorblindModeActive;
 
     }
-
-	private Vector3 ObtainGridPos(int cubePos)
-	{
-		var unmodified = gridButtons[cubePos].transform.localPosition;
-
-		return new Vector3(unmodified.x, 0.01f, unmodified.z);
-	}
-
-	private static Vector3 RotatePointAroundPivot(Vector3 point, Vector3 pivot, Quaternion rotation) => rotation * (point - pivot) + pivot;
-
 	
 	void Start()
     {
-		var randomColorPlacementIxes = Enumerable.Range(0, 16).ToList().Shuffle().Take(6).ToArray();
 
 		netColors = Enumerable.Range(0, 7).Select(x => (PCColor)x).ToList();
 		missingColor = (PCColor)Range(0, 7);
 
 		netColors.RemoveAt((int)missingColor);
 
-		for (int i = 0; i < 6; i++)
-			grid[randomColorPlacementIxes[i]] = new ColorInfo(netColors[i], faceColors[(int)netColors[i]]);
+		initialGrid = grid.ToArray();
+
+
+		puzzle = new PaintingCubePuzzle(netColors.Select(x => new ColorInfo(x, faceColors[(int)x])).ToArray(), missingColor);
 
 		SetGrid();
 		SetCube();
 
 		cubeFaceIxes = Enumerable.Range(0, 6).ToArray();
 
-		currentCubePos = Enumerable.Range(0, 16).Where(x => !randomColorPlacementIxes.Contains(x)).PickRandom();
-		validDirections = GetValidDirections(currentCubePos);
+		validDirections = DirectionInfo.GetValidDirections(currentCubePos);
 		cube.localPosition = ObtainGridPos(currentCubePos);
     }
 
@@ -178,6 +146,31 @@ public class PaintingCubeScript : MonoBehaviour {
 		var movingIx = validDirections.IndexOf(x => x?.Position == ix);
 
 		cubeMoving = StartCoroutine(MoveCube(validDirections[movingIx]));
+	}
+
+	void ResetPress()
+	{
+		Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, transform);
+		reset.AddInteractionPunch(0.4f);
+
+		if (moduleSolved || cubeMoving != null)
+			return;
+
+		currentCubePos = startingCubePos;
+		validDirections = DirectionInfo.GetValidDirections(currentCubePos);
+
+		for (int i = 0; i < 6; i++)
+			cubeFaces[i] = null;
+
+		grid = initialGrid.ToArray();
+
+		cube.localEulerAngles = Vector3.zero;
+		cube.localPosition = ObtainGridPos(currentCubePos);
+
+		cubeFaceIxes = Enumerable.Range(0, 6).ToArray();
+
+		SetGrid();
+		SetCube();
 	}
 
 	IEnumerator MoveCube(DirectionInfo dir)
@@ -229,8 +222,112 @@ public class PaintingCubeScript : MonoBehaviour {
 		cubeFaceIxes = cubeOrientationTable[(int)dir.Direction].Select(x => copiedOrientation[x]).ToArray();
 
 		currentCubePos = dir.Position;
-		validDirections = GetValidDirections(currentCubePos);
+		validDirections = DirectionInfo.GetValidDirections(currentCubePos);
 		cubeMoving = null;
+	}
+
+	IEnumerator Solve()
+	{
+		var duration = 1f;
+		var elapsed = 0f;
+
+		var oldPos = cube.localPosition;
+		var nahIdWin = new Vector3(oldPos.x, 4, oldPos.z);
+
+		foreach (var text in gridButtons.Select(x => x.GetComponentInChildren<TextMesh>()))
+			text.text = string.Empty;
+
+		foreach (var text in cubeFaceRenders.Select(x => x.GetComponentInChildren<TextMesh>()))
+			text.text = string.Empty;
+
+		Audio.PlaySoundAtTransform("Solve", transform);
+
+		moduleSolved = true;
+		Module.HandlePass();
+
+		Coroutine spin, flashingGrid;
+
+		spin = StartCoroutine(SpinningCube());
+		flashingGrid = StartCoroutine(FlashGrid());
+
+		while (elapsed < duration)
+		{
+			cube.localPosition = new Vector3(oldPos.x, Easing.InQuint(elapsed, oldPos.y, nahIdWin.y, duration), oldPos.z);
+			yield return null;
+			elapsed += Time.deltaTime;
+		}
+
+		StopCoroutine(spin);
+
+		cube.localPosition = nahIdWin;
+		cube.gameObject.SetActive(false);
+	}
+
+	IEnumerator SpinningCube()
+	{
+		float offset;
+		var buildup = 0f;
+
+		while (true)
+		{
+			if (buildup < 2.5f)
+				buildup += 0.05f;
+
+			offset = Time.deltaTime * 35 * buildup;
+			cube.localEulerAngles += offset * Vector3.one;
+			yield return null;
+		}
+	}
+
+	IEnumerator FlashGrid()
+	{
+		yield return null;
+
+		var renders = gridButtons.Select(x => x.GetComponent<MeshRenderer>()).ToArray();
+
+		var ixOrder = new[] { 0, 1, 2, 3, 7, 11, 15, 14, 13, 12, 8, 4, 5, 6, 10, 9 };
+
+		Coroutine[] startFlashingCell = new Coroutine[16];
+
+		for (int i = 0; i < 16; i++)
+		{
+			startFlashingCell[ixOrder[i]] = StartCoroutine(FlashCell(renders[ixOrder[i]]));
+            yield return new WaitForSeconds(0.03f);
+        }
+		yield return new WaitForSeconds(0.4f);
+
+		foreach (var cell in startFlashingCell)
+			StopCoroutine(cell);
+
+		foreach (var render in renders)
+			render.material.color = Color.green;
+
+		yield return new WaitForSeconds(0.05f);
+
+		foreach (var render in renders)
+			render.material.color = gridBorderColor;
+
+        yield return new WaitForSeconds(0.05f);
+
+        foreach (var render in renders)
+            render.material.color = Color.green;
+
+    }
+
+    IEnumerator FlashCell(MeshRenderer cell)
+	{
+		var colorIx = 0;
+
+		while (true)
+		{
+			cell.material.color = faceColors[colorIx];
+
+			yield return new WaitForSeconds(0.03f);
+
+			colorIx++;
+			colorIx %= faceColors.Length;
+
+		}
 	}
 
 	// Twitch Plays
