@@ -96,18 +96,26 @@ public class PaintingCubeScript : MonoBehaviour {
 
 		netColors.RemoveAt((int)missingColor);
 
-		initialGrid = grid.ToArray();
+		var scatteredCoordinates = Enumerable.Range(0, 16).ToList().Shuffle().Take(6).ToArray();
 
+		puzzle = new PaintingCubePuzzle(netColors.Select(x => new ColorInfo(x, faceColors[(int)x])).ToArray(), missingColor, Enumerable.Range(0, 7).Select(x => new ColorInfo((PCColor)x, faceColors[x])).ToArray());
 
-		puzzle = new PaintingCubePuzzle(netColors.Select(x => new ColorInfo(x, faceColors[(int)x])).ToArray(), missingColor);
+		for (int i = 0; i < 6; i++)
+			grid[scatteredCoordinates[i]] = new ColorInfo(netColors[i], faceColors[(int)netColors[i]]);
 
-		SetGrid();
+        initialGrid = grid.ToArray();
+
+		startingCubePos = currentCubePos = Enumerable.Range(0, 16).Where(x => grid[x] == null).PickRandom();
+
+        SetGrid();
 		SetCube();
 
 		cubeFaceIxes = Enumerable.Range(0, 6).ToArray();
 
 		validDirections = DirectionInfo.GetValidDirections(currentCubePos);
 		cube.localPosition = ObtainGridPos(currentCubePos);
+
+		Log($"[Painting Cube #{moduleId}] The missing color from the grid is: {missingColor}");
     }
 
 	void SetGrid()
@@ -223,6 +231,25 @@ public class PaintingCubeScript : MonoBehaviour {
 
 		currentCubePos = dir.Position;
 		validDirections = DirectionInfo.GetValidDirections(currentCubePos);
+
+		if (cubeFaces.Count(x => x != null) == 5 && grid[currentCubePos] != null && cubeFaces[cubeFaceIxes[5]] == null)
+		{
+			cubeFaces[cubeFaceIxes[5]] = grid[currentCubePos];
+			grid[currentCubePos] = null;
+
+            SetGrid();
+            SetCube();
+
+            if (puzzle.CheckVertex(new[] { 0, 2, 1 }.Select(x => cubeFaces[cubeFaceIxes[x]]).ToArray()))
+			{
+				StartCoroutine(Solve());
+			}
+			else
+			{
+				Module.HandleStrike();
+			}
+		}
+
 		cubeMoving = null;
 	}
 
