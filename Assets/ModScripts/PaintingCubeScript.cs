@@ -31,7 +31,8 @@ public class PaintingCubeScript : MonoBehaviour {
 	private List<PCColor> netColors;
 	private PCColor missingColor;
 
-
+	[SerializeField]
+	private GameObject debugDot;
 
 	private int currentCubePos, startingCubePos;
 
@@ -90,6 +91,8 @@ public class PaintingCubeScript : MonoBehaviour {
 	
 	void Start()
     {
+		// Under no circumstances should this be enabled outside of the editor.
+		debugDot.SetActive(Application.isEditor);
 
 		netColors = Enumerable.Range(0, 7).Select(x => (PCColor)x).ToList();
 		missingColor = (PCColor)Range(0, 7);
