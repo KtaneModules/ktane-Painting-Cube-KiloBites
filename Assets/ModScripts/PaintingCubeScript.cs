@@ -50,7 +50,7 @@ public class PaintingCubeScript : MonoBehaviour {
 		new Color(1, 0.5f, 0),
 		new Color(1, 1, 0),
 		Color.green,
-		Color.blue,
+		new Color(0, 0.4f, 1),
 		new Color(0, 0, 0.5f),
 		new Color(0.5f, 0, 0.5f)
 	};
