@@ -99,16 +99,11 @@ public class PaintingCubeScript : MonoBehaviour {
 
 		netColors.RemoveAt((int)missingColor);
 
-		var scatteredCoordinates = Enumerable.Range(0, 16).ToList().Shuffle().Take(6).ToArray();
+		puzzle = new PaintingCubePuzzle(missingColor, Enumerable.Range(0, 7).Select(x => new ColorInfo((PCColor)x, faceColors[x])).ToArray());
 
-		puzzle = new PaintingCubePuzzle(netColors.Select(x => new ColorInfo(x, faceColors[(int)x])).ToArray(), missingColor, Enumerable.Range(0, 7).Select(x => new ColorInfo((PCColor)x, faceColors[x])).ToArray());
-
-		for (int i = 0; i < 6; i++)
-			grid[scatteredCoordinates[i]] = new ColorInfo(netColors[i], faceColors[(int)netColors[i]]);
-
+		grid = puzzle.Grid.ToArray().Shuffle();
+		currentCubePos = startingCubePos = Enumerable.Range(0, 16).Where(x => grid[x] == null).PickRandom();
         initialGrid = grid.ToArray();
-
-		startingCubePos = currentCubePos = Enumerable.Range(0, 16).Where(x => grid[x] == null).PickRandom();
 
         SetGrid();
 		SetCube();
