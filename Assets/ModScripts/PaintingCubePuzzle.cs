@@ -28,13 +28,12 @@ public class PaintingCubePuzzle
     };
 
 
-    public PaintingCubePuzzle(PCColor missingColor, ColorInfo[] colorReferences)
+    public PaintingCubePuzzle(PCColor missingColor, ColorInfo[] colorReferences, MonoRandom ruleSeeder)
     {
         _missingColor = missingColor;
         _colorReferences = colorReferences;
 
-
-        GenerateCube();
+        GenerateCube(ruleSeeder);
     }
 
     private struct OrientedCube
@@ -55,7 +54,7 @@ public class PaintingCubePuzzle
 
     private List<ColorInfo[]> gridCandidates;
 
-    void GenerateCube()
+    void GenerateCube(MonoRandom ruleSeeder)
     {
         var cubeNetOpposite = new Dictionary<int, int>
         {
@@ -67,28 +66,29 @@ public class PaintingCubePuzzle
             { 5, 0 }
         };
 
-        var vertexIxes = new[]
+        var pcColors = (PCColor[]) Enum.GetValues(typeof(PCColor));
+        var vertexIxes = new PCColor[7][];
+        for (var cube = 0; cube < 7; cube++)
         {
-            new[] { 1, 2, 4 },
-            new[] { 2, 3, 5 },
-            new[] { 3, 4, 6 },
-            new[] { 0, 4, 5 },
-            new[] { 1, 5, 6 },
-            new[] { 0, 2, 6 },
-            new[] { 0, 1, 3 }
-        };
+            var colors = pcColors.ToList();
+            colors.Remove((PCColor) cube);
+            ruleSeeder.ShuffleFisherYates(colors);
+            vertexIxes[cube] = new PCColor[3];
+            for (var i = 0; i < 3; i++)
+                vertexIxes[cube][i] = colors[i];
+        }
 
         var vertex = new[] { 0, 2, 1 };
 
         for (int i = 0; i < 3; i++)
-            tempCube[vertex[i]] = _colorReferences[vertexIxes[(int)_missingColor][i]];
+            tempCube[vertex[i]] = _colorReferences[(int) vertexIxes[(int) _missingColor][i]];
 
         tryagain:
 
-        var restColors = Enumerable.Range(0, 7).Where(x => !vertexIxes[(int)_missingColor].Contains(x) && (PCColor)x != _missingColor).ToArray().Shuffle();
+        var restColors = pcColors.Where(color => !vertexIxes[(int) _missingColor].Contains(color) && color != _missingColor).ToArray().Shuffle();
 
         for (int i = 0; i < 3; i++)
-            tempCube[cubeNetOpposite[vertex[i]]] = _colorReferences[restColors[i]];
+            tempCube[cubeNetOpposite[vertex[i]]] = _colorReferences[(int) restColors[i]];
 
         Log(tempCube.Select(x => $"[{x.Color}]").Join());
 
@@ -125,7 +125,7 @@ public class PaintingCubePuzzle
                     gridCandidate[cell.Position] = cubeCandidate[cube.CurrentOrientation[5]];
                     cubeCandidate[cube.CurrentOrientation[5]] = null;
 
-                    candidates.Add(new OrientedCube(cubeCandidate, gridCandidate, cubeOrientationTable[(int)cell.Direction].Select(x => cube.CurrentOrientation[x]).ToArray(), cell.Position));
+                    candidates.Add(new OrientedCube(cubeCandidate, gridCandidate, cubeOrientationTable[(int) cell.Direction].Select(x => cube.CurrentOrientation[x]).ToArray(), cell.Position));
                 }
             }
 
@@ -180,7 +180,7 @@ public class PaintingCubePuzzle
                     gridCandidate[cell.Position] = cubeCandidate[candidate.CurrentOrientation[5]];
                     cubeCandidate[candidate.CurrentOrientation[5]] = null;
 
-                    newCandidates.Add(new OrientedCube(cubeCandidate, gridCandidate, cubeOrientationTable[(int)cell.Direction].Select(x => candidate.CurrentOrientation[x]).ToArray(), cell.Position));
+                    newCandidates.Add(new OrientedCube(cubeCandidate, gridCandidate, cubeOrientationTable[(int) cell.Direction].Select(x => candidate.CurrentOrientation[x]).ToArray(), cell.Position));
                 }
 
                 /*
