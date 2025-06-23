@@ -112,7 +112,15 @@ public class PaintingCubeScript : MonoBehaviour
         validDirections = DirectionInfo.GetValidDirections(currentCubePos);
         cube.localPosition = ObtainGridPos(currentCubePos);
 
-        Log($"[Painting Cube #{moduleId}] The missing color from the grid is: {missingColor}");
+        var ruleseedCheck = RuleSeedable.GetRNG().Seed;
+
+        if (ruleseedCheck != 1)
+            Log($"[Painting Cube #{moduleId}] Currently using ruleseed #{ruleseedCheck}");
+
+        Log($"[Painting Cube #{moduleId}] The missing color from the grid is: {missingColor}. The correct vertex to use is: {puzzle.ObtainVertex()}");
+        Log($"[Painting Cube #{moduleId}] The initial grid is: {puzzle.ObtainGrid()}");
+        Log($"[Painting Cube #{moduleId}] The cube's starting position is at {"ABCD"[startingCubePos % 4]}{(startingCubePos / 4) + 1}");
+        Log($"[Painting Cube #{moduleId}] The number of moves you could possibly make are at least or at most {puzzle.TrackedDirections.Count}");
     }
 
     void SetGrid()
@@ -239,7 +247,7 @@ public class PaintingCubeScript : MonoBehaviour
 
             if (puzzle.CheckVertex(Enumerable.Range(0, 3).Select(x => cubeFaces[cubeFaceIxes[x]]).ToArray()))
             {
-                // To do: Log the solve.
+                Log($"[Painting Cube #{moduleId}] The current orientation of the cube has the correct vertex. Solved!");
                 StartCoroutine(Solve());
             }
         }
@@ -355,13 +363,69 @@ public class PaintingCubeScript : MonoBehaviour
 
 
 #pragma warning disable 414
-    private readonly string TwitchHelpMessage = @"!{0} something";
+    private readonly string TwitchHelpMessage = @"!{0} move urdl to move the cube that many directions || !{0} cb to toggle colorblind || !{0} reset to reset the module back to its initial state";
 #pragma warning restore 414
 
     IEnumerator ProcessTwitchCommand(string command)
     {
         string[] split = command.ToUpperInvariant().Split(new[] { " " }, StringSplitOptions.RemoveEmptyEntries);
         yield return null;
+
+        if ("CB".ContainsIgnoreCase(split[0]))
+        {
+            cbActive = !cbActive;
+            SetCube();
+            SetGrid();
+            yield break;
+        }
+
+        if ("MOVE".ContainsIgnoreCase(split[0]))
+        {
+            if (split.Length == 1)
+            {
+                yield return "sendtochaterror I don't understand.";
+                yield break;
+            }
+
+            if (split.Length > 2)
+            {
+                yield return "sendtochaterror Please input your moves without spaces!";
+                yield break;
+            }
+
+            if (!split[1].Any("URDL".Contains))
+            {
+                yield return $"sendtochaterror {split[1].Where(x => !"URDL".Contains(x)).Join(", ")} is/are invalid!";
+                yield break;
+            }
+
+            var directions = split[1].Select(x => (CubeDirection)"URDL".IndexOf(x)).ToList();
+
+            foreach (var direction in directions)
+            {
+                var dirPosition = DirectionInfo.GetValidDirections(currentCubePos).SingleOrDefault(x => x?.Direction == direction);
+
+                if (dirPosition == null)
+                {
+                    yield return $"sendtochaterror The module has halted since going {direction.ToString().ToLowerInvariant()} goes out of bounds.";
+                    yield break;
+                }
+
+                gridButtons[dirPosition.Position].OnInteract();
+                yield return new WaitUntil(() => cubeMoving == null);
+            }
+
+            yield break;
+        }
+
+        if ("RESET".ContainsIgnoreCase(split[0]))
+        {
+            if (split.Length > 1)
+                yield break;
+
+            reset.OnInteract();
+            yield return new WaitForSeconds(0.1f);
+        }
     }
 
     IEnumerator TwitchHandleForcedSolve()
@@ -369,6 +433,9 @@ public class PaintingCubeScript : MonoBehaviour
         yield return null;
 
         var makeMoves = puzzle.TrackedDirections.ToList();
+
+        while (cubeMoving != null)
+            yield return true;
 
         if (currentCubePos != startingCubePos)
         {

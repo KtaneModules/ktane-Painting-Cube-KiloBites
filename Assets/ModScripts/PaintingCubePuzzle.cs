@@ -6,22 +6,23 @@ using static UnityEngine.Debug;
 
 public class PaintingCubePuzzle
 {
-    private PCColor _missingColor;
+    private readonly PCColor _missingColor;
 
-    private ColorInfo[] _colorReferences;
+    private readonly ColorInfo[] _colorReferences;
 
     private bool failed;
 
     private int retries = 0;
 
-    private ColorInfo[] tempCube = new ColorInfo[6];
+    private readonly ColorInfo[] tempCube = new ColorInfo[6];
     public ColorInfo[] Grid;
     public int StartingPos;
     public List<DirectionInfo> TrackedDirections;
 
     public bool CheckVertex(ColorInfo[] vertex) => Enumerable.Range(0, 3).Select(x => tempCube[x]).SequenceEqual(vertex);
 
-    
+    public string ObtainVertex() => Enumerable.Range(0, 3).Select(x => $"[{tempCube[x].Color}]").Join();
+    public string ObtainGrid() => Enumerable.Range(0, 4).Select(row => Enumerable.Range(0, 4).Select(col => $"[{Grid[4 * row + col]?.Color.ToString() ?? "X"}]").Join("")).Join(";");
 
     private static readonly int[][] cubeOrientationTable =
     {
@@ -95,8 +96,6 @@ public class PaintingCubePuzzle
         for (int i = 0; i < 3; i++)
             tempCube[cubeNetOpposite[vertex[i]]] = _colorReferences[(int) restColors[i]];
 
-        Log(tempCube.Select(x => $"[{x.Color}]").Join());
-
         GeneratePuzzle();
 
         if (failed)
@@ -166,6 +165,9 @@ public class PaintingCubePuzzle
             if (trackedCandidates.Count > 100)
                 continue;
 
+            if (cube.CurrentGrid[cube.CurrentPosition] != null || !IsValid(trackedCandidates, cube.CurrentGrid.ToArray(), cube.CurrentPosition))
+                continue;
+
             gridCandidates.Add(cube.CurrentGrid.ToArray());
             startingPosCandidates.Add(cube.CurrentPosition);
             trackedMovesCandidates.Add(trackedCandidates.ToList());
@@ -174,5 +176,36 @@ public class PaintingCubePuzzle
         if (gridCandidates.Count == 0)
             failed = true;
 
+    }
+
+    private bool IsValid(List<DirectionInfo> trackedDirections, ColorInfo[] grid, int pos)
+    {
+        var cube = new OrientedCube(new ColorInfo[6], grid.ToArray(), Enumerable.Range(0, 6).ToArray(), pos);
+
+        for (int i = trackedDirections.Count - 1; i >= 0; i--)
+        {
+            if (cube.CurrentGrid[cube.CurrentPosition] == null && cube.CurrentCube[cube.CurrentOrientation[5]] != null)
+            {
+                cube.CurrentGrid[cube.CurrentPosition] = cube.CurrentCube[cube.CurrentOrientation[5]];
+                cube.CurrentCube[cube.CurrentOrientation[5]] = null;
+            }
+            else if (cube.CurrentGrid[cube.CurrentPosition] != null && cube.CurrentCube[cube.CurrentOrientation[5]] == null)
+            {
+                cube.CurrentCube[cube.CurrentOrientation[5]] = cube.CurrentGrid[cube.CurrentPosition];
+                cube.CurrentGrid[cube.CurrentPosition] = null;
+            }
+
+            cube.CurrentPosition = trackedDirections[i].Position;
+            var orientation = cube.CurrentOrientation.ToArray();
+            cube.CurrentOrientation = cubeOrientationTable[(int)trackedDirections[i].Direction].Select(x => orientation[x]).ToArray();
+        }
+
+        if (cube.CurrentCube.Count(x => x != null) == 5 && cube.CurrentGrid[cube.CurrentPosition] != null && cube.CurrentCube[cube.CurrentOrientation[5]] == null)
+        {
+            cube.CurrentCube[cube.CurrentOrientation[5]] = cube.CurrentGrid[cube.CurrentPosition];
+            cube.CurrentGrid[cube.CurrentPosition] = null;
+        }
+
+        return cube.CurrentCube.All(x => x != null);
     }
 }

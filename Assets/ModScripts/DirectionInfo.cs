@@ -13,8 +13,6 @@ public class DirectionInfo
         Position = position;
     }
 
-    public override string ToString() => $"{"ABCD"[Position % 4]}{(Position / 4) + 1}";
-
     public static DirectionInfo[] GetValidDirections(int cubePos)
     {
 

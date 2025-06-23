@@ -14,7 +14,11 @@ MonoBehaviour:
   id: paintingCube
   title: Painting Cube
   author: Kilo Bites
-  description: 
+  description: 'They put colors in the water that turn the freaking cubes gay!
+
+
+    Move a cube to fill the faces with colors while maintaining a specific order of
+    the first three colors on a vertex.'
   version: 1
   outputFolder: build
   previewImage: {fileID: 0}
