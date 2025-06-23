@@ -10,14 +10,18 @@ public class PaintingCubePuzzle
 
     private ColorInfo[] _colorReferences;
 
-    private bool isSolved, failed;
+    private bool failed;
 
     private int retries = 0;
 
     private ColorInfo[] tempCube = new ColorInfo[6];
     public ColorInfo[] Grid;
+    public int StartingPos;
+    public List<DirectionInfo> TrackedDirections;
 
     public bool CheckVertex(ColorInfo[] vertex) => Enumerable.Range(0, 3).Select(x => tempCube[x]).SequenceEqual(vertex);
+
+    
 
     private static readonly int[][] cubeOrientationTable =
     {
@@ -26,7 +30,6 @@ public class PaintingCubePuzzle
         new[] { 3, 0, 2, 5, 4, 1 },
         new[] { 2, 1, 5, 3, 0, 4 }
     };
-
 
     public PaintingCubePuzzle(PCColor missingColor, ColorInfo[] colorReferences, MonoRandom ruleSeeder)
     {
@@ -38,10 +41,10 @@ public class PaintingCubePuzzle
 
     private struct OrientedCube
     {
-        public ColorInfo[] CurrentCube { get; private set; }
-        public ColorInfo[] CurrentGrid { get; private set; }
-        public int[] CurrentOrientation { get; private set; }
-        public int CurrentPosition { get; private set; }
+        public ColorInfo[] CurrentCube { get; set; }
+        public ColorInfo[] CurrentGrid { get; set; }
+        public int[] CurrentOrientation { get; set; }
+        public int CurrentPosition { get; set; }
 
         public OrientedCube(ColorInfo[] currentCube, ColorInfo[] currentGrid, int[] currentOrientation, int currentPosition)
         {
@@ -52,7 +55,9 @@ public class PaintingCubePuzzle
         }
     }
 
-    private List<ColorInfo[]> gridCandidates;
+    private List<ColorInfo[]> gridCandidates = new List<ColorInfo[]>();
+    private List<List<DirectionInfo>> trackedMovesCandidates = new List<List<DirectionInfo>>();
+    private List<int> startingPosCandidates = new List<int>();
 
     void GenerateCube(MonoRandom ruleSeeder)
     {
@@ -78,14 +83,14 @@ public class PaintingCubePuzzle
                 vertexIxes[cube][i] = colors[i];
         }
 
-        var vertex = new[] { 0, 2, 1 };
+        var vertex = Enumerable.Range(0, 3).ToArray();
 
         for (int i = 0; i < 3; i++)
             tempCube[vertex[i]] = _colorReferences[(int) vertexIxes[(int) _missingColor][i]];
 
         tryagain:
 
-        var restColors = pcColors.Where(color => !vertexIxes[(int) _missingColor].Contains(color) && color != _missingColor).ToArray().Shuffle();
+        var restColors = pcColors.Where(color => !vertexIxes[(int)_missingColor].Contains(color) && color != _missingColor).ToArray().Shuffle();
 
         for (int i = 0; i < 3; i++)
             tempCube[cubeNetOpposite[vertex[i]]] = _colorReferences[(int) restColors[i]];
@@ -95,112 +100,87 @@ public class PaintingCubePuzzle
         GeneratePuzzle();
 
         if (failed)
+        {
+            retries++;
+
+            if (retries > 3)
+                throw new Exception("The puzzle cannot be generated.");
+
+            failed = false;
+
             goto tryagain;
+        }
+
+        var randomCandidate = Range(0, gridCandidates.Count);
+
+        StartingPos = startingPosCandidates[randomCandidate];
+        Grid = gridCandidates[randomCandidate];
+        TrackedDirections = trackedMovesCandidates[randomCandidate];
     }
 
     void GeneratePuzzle()
     {
-        var positionQueue = new Queue<int>(Enumerable.Range(0, 16).ToList().Shuffle());
+        var goalQueue = new Queue<int>(Enumerable.Range(0, 16).ToList().Shuffle());
 
-        var positionCandidates = new List<int>();
-        gridCandidates = new List<ColorInfo[]>();
-
-        while (positionQueue.Count > 0)
+        var oppositeDir = new Dictionary<CubeDirection, CubeDirection>
         {
-            var position = positionQueue.Dequeue();
+            { CubeDirection.Up, CubeDirection.Down },
+            { CubeDirection.Right, CubeDirection.Left },
+            { CubeDirection.Down, CubeDirection.Up },
+            { CubeDirection.Left, CubeDirection.Right }
+        };
 
-            var cube = new OrientedCube(tempCube.ToArray(), new ColorInfo[16], Enumerable.Range(0, 6).ToArray(), position);
+        while (goalQueue.Count > 0)
+        {
+            var goal = goalQueue.Dequeue();
 
-            var candidates = new List<OrientedCube>();
+            var cube = new OrientedCube(tempCube.ToArray(), new ColorInfo[16], Enumerable.Range(0, 6).ToArray(), goal);
 
-            var adj = DirectionInfo.GetValidDirections(position).Where(x => x != null).ToArray();
+            var trackedCandidates = new List<DirectionInfo>();
 
-            foreach (var cell in adj)
+            while (true)
             {
-                if (cube.CurrentGrid[cell.Position] == null && cube.CurrentCube[cube.CurrentOrientation[5]] != null)
+                if (cube.CurrentCube.All(x => x == null) || trackedCandidates.Count > 100)
+                    break;
+
+                var randomMove = DirectionInfo.GetValidDirections(cube.CurrentPosition).Where(x => x != null).PickRandom();
+
+                trackedCandidates.Add(new DirectionInfo(oppositeDir[randomMove.Direction], cube.CurrentPosition));
+
+                if (cube.CurrentGrid[randomMove.Position] == null && cube.CurrentCube[cube.CurrentOrientation[5]] != null)
                 {
-                    var cubeCandidate = cube.CurrentCube.ToArray();
-                    var gridCandidate = cube.CurrentGrid.ToArray();
-
-                    gridCandidate[cell.Position] = cubeCandidate[cube.CurrentOrientation[5]];
-                    cubeCandidate[cube.CurrentOrientation[5]] = null;
-
-                    candidates.Add(new OrientedCube(cubeCandidate, gridCandidate, cubeOrientationTable[(int) cell.Direction].Select(x => cube.CurrentOrientation[x]).ToArray(), cell.Position));
+                    cube.CurrentGrid[randomMove.Position] = cube.CurrentCube[cube.CurrentOrientation[5]];
+                    cube.CurrentCube[cube.CurrentOrientation[5]] = null;
                 }
-            }
-
-            Backtrack(candidates, new List<OrientedCube>() { cube });
-
-            if (isSolved)
-            {
-                positionCandidates.Add(position);
-                isSolved = false;
-            }
-        }
-
-        failed = positionCandidates.Count == 0;
-
-        if (failed)
-        {
-            retries++;
-
-            if (retries == 3)
-                throw new Exception("Cube puzzle cannot be generated.");
-
-            return;
-        }
-
-        var randomCandidate = Range(0, positionCandidates.Count);
-
-        Grid = gridCandidates[randomCandidate];
-    }
-
-    void Backtrack(List<OrientedCube> candidates, List<OrientedCube> current)
-    {
-        if (current.Any(x => x.CurrentCube.All(y => y == null)))
-        {
-            isSolved = true;
-            gridCandidates.Add(current[current.IndexOf(x => x.CurrentCube.All(y => y == null))].CurrentGrid);
-            return;
-        }
-
-        foreach (var candidate in candidates)
-        {
-            var adj = DirectionInfo.GetValidDirections(candidate.CurrentPosition).Where(x => x != null).ToArray();
-
-            var newCandidates = new List<OrientedCube>();
-
-            foreach (var cell in adj)
-            {
-                var cubeCandidate = candidate.CurrentCube.ToArray();
-                var gridCandidate = candidate.CurrentGrid.ToArray();
-
-                if (candidate.CurrentGrid[cell.Position] == null && candidate.CurrentCube[candidate.CurrentOrientation[5]] != null)
+                else if (cube.CurrentGrid[randomMove.Position] != null && cube.CurrentCube[cube.CurrentOrientation[5]] == null)
                 {
-                    gridCandidate[cell.Position] = cubeCandidate[candidate.CurrentOrientation[5]];
-                    cubeCandidate[candidate.CurrentOrientation[5]] = null;
-
-                    newCandidates.Add(new OrientedCube(cubeCandidate, gridCandidate, cubeOrientationTable[(int) cell.Direction].Select(x => candidate.CurrentOrientation[x]).ToArray(), cell.Position));
+                    cube.CurrentCube[cube.CurrentOrientation[5]] = cube.CurrentGrid[randomMove.Position];
+                    cube.CurrentGrid[randomMove.Position] = null;
                 }
 
-                /*
-
-                else if (candidate.CurrentGrid[cell.Position] != null && candidate.CurrentCube[candidate.CurrentOrientation[5]] == null)
-                {
-                    cubeCandidate[candidate.CurrentOrientation[5]] = gridCandidate[cell.Position];
-                    gridCandidate[cell.Position] = null;
-
-                    newCandidates.Add(new OrientedCube(cubeCandidate, gridCandidate, cubeOrientationTable[(int)cell.Direction].Select(x => candidate.CurrentOrientation[x]).ToArray(), cell.Position));
-                }
-                */
+                cube.CurrentPosition = randomMove.Position;
+                var orientation = cube.CurrentOrientation.ToArray();
+                cube.CurrentOrientation = cubeOrientationTable[(int)randomMove.Direction].Select(x => orientation[x]).ToArray();
             }
 
-            foreach (var newCandidate in newCandidates)
-            {
-                current.Add(newCandidate);
-                Backtrack(newCandidates, current);
-                current.Remove(newCandidate);
-            }
+            if (trackedCandidates.Count > 100)
+                continue;
+
+            if (DirectionInfo.GetValidDirections(cube.CurrentPosition).Where(x => x != null).Count(x => cube.CurrentGrid[x.Position] == null) == 0)
+                continue;
+
+            var moveAway = DirectionInfo.GetValidDirections(cube.CurrentPosition).Where(x => x != null).Where(x => cube.CurrentGrid[x.Position] == null).PickRandom();
+
+            trackedCandidates.Add(new DirectionInfo(oppositeDir[moveAway.Direction], cube.CurrentPosition));
+            cube.CurrentPosition = moveAway.Position;
+
+            gridCandidates.Add(cube.CurrentGrid.ToArray());
+            startingPosCandidates.Add(cube.CurrentPosition);
+            trackedMovesCandidates.Add(trackedCandidates.ToList());
         }
+
+        if (gridCandidates.Count == 0)
+            failed = true;
+
     }
 }

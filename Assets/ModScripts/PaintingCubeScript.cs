@@ -100,8 +100,8 @@ public class PaintingCubeScript : MonoBehaviour
 
         puzzle = new PaintingCubePuzzle(missingColor, Enumerable.Range(0, 7).Select(x => new ColorInfo((PCColor) x, faceColors[x])).ToArray(), RuleSeedable.GetRNG());
 
-        grid = puzzle.Grid.ToArray().Shuffle();
-        currentCubePos = startingCubePos = Enumerable.Range(0, 16).Where(x => grid[x] == null).PickRandom();
+        grid = puzzle.Grid.ToArray();
+        currentCubePos = startingCubePos = puzzle.StartingPos;
         initialGrid = grid.ToArray();
 
         SetGrid();
@@ -239,11 +239,8 @@ public class PaintingCubeScript : MonoBehaviour
 
             if (puzzle.CheckVertex(new[] { 0, 2, 1 }.Select(x => cubeFaces[cubeFaceIxes[x]]).ToArray()))
             {
+                // To do: Log the solve.
                 StartCoroutine(Solve());
-            }
-            else
-            {
-                Module.HandleStrike();
             }
         }
 
@@ -370,6 +367,20 @@ public class PaintingCubeScript : MonoBehaviour
     IEnumerator TwitchHandleForcedSolve()
     {
         yield return null;
+
+        var makeMoves = puzzle.TrackedDirections.ToList();
+
+        if (currentCubePos != startingCubePos)
+        {
+            reset.OnInteract();
+            yield return new WaitForSeconds(0.1f);
+        }
+
+        for (int i = makeMoves.Count - 1; i >= 0; i--)
+        {
+            gridButtons[makeMoves[i].Position].OnInteract();
+            yield return new WaitUntil(() => cubeMoving == null);
+        }
     }
 
 
