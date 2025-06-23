@@ -147,15 +147,15 @@ public class PaintingCubePuzzle
 
                 trackedCandidates.Add(new DirectionInfo(oppositeDir[randomMove.Direction], cube.CurrentPosition));
 
-                if (cube.CurrentGrid[randomMove.Position] == null && cube.CurrentCube[cube.CurrentOrientation[5]] != null)
+                if (cube.CurrentGrid[cube.CurrentPosition] == null && cube.CurrentCube[cube.CurrentOrientation[5]] != null)
                 {
-                    cube.CurrentGrid[randomMove.Position] = cube.CurrentCube[cube.CurrentOrientation[5]];
+                    cube.CurrentGrid[cube.CurrentPosition] = cube.CurrentCube[cube.CurrentOrientation[5]];
                     cube.CurrentCube[cube.CurrentOrientation[5]] = null;
                 }
-                else if (cube.CurrentGrid[randomMove.Position] != null && cube.CurrentCube[cube.CurrentOrientation[5]] == null)
+                else if (cube.CurrentGrid[cube.CurrentPosition] != null && cube.CurrentCube[cube.CurrentOrientation[5]] == null)
                 {
-                    cube.CurrentCube[cube.CurrentOrientation[5]] = cube.CurrentGrid[randomMove.Position];
-                    cube.CurrentGrid[randomMove.Position] = null;
+                    cube.CurrentCube[cube.CurrentOrientation[5]] = cube.CurrentGrid[cube.CurrentPosition];
+                    cube.CurrentGrid[cube.CurrentPosition] = null;
                 }
 
                 cube.CurrentPosition = randomMove.Position;
@@ -165,14 +165,6 @@ public class PaintingCubePuzzle
 
             if (trackedCandidates.Count > 100)
                 continue;
-
-            if (DirectionInfo.GetValidDirections(cube.CurrentPosition).Where(x => x != null).Count(x => cube.CurrentGrid[x.Position] == null) == 0)
-                continue;
-
-            var moveAway = DirectionInfo.GetValidDirections(cube.CurrentPosition).Where(x => x != null).Where(x => cube.CurrentGrid[x.Position] == null).PickRandom();
-
-            trackedCandidates.Add(new DirectionInfo(oppositeDir[moveAway.Direction], cube.CurrentPosition));
-            cube.CurrentPosition = moveAway.Position;
 
             gridCandidates.Add(cube.CurrentGrid.ToArray());
             startingPosCandidates.Add(cube.CurrentPosition);

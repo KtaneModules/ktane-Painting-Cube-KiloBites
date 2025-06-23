@@ -237,7 +237,7 @@ public class PaintingCubeScript : MonoBehaviour
             SetGrid();
             SetCube();
 
-            if (puzzle.CheckVertex(new[] { 0, 2, 1 }.Select(x => cubeFaces[cubeFaceIxes[x]]).ToArray()))
+            if (puzzle.CheckVertex(Enumerable.Range(0, 3).Select(x => cubeFaces[cubeFaceIxes[x]]).ToArray()))
             {
                 // To do: Log the solve.
                 StartCoroutine(Solve());
