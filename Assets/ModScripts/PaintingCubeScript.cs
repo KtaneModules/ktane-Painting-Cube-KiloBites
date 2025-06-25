@@ -245,7 +245,7 @@ public class PaintingCubeScript : MonoBehaviour
             SetGrid();
             SetCube();
 
-            if (puzzle.CheckVertex(Enumerable.Range(0, 3).Select(x => cubeFaces[cubeFaceIxes[x]]).ToArray()))
+            if (new[] { Enumerable.Range(0, 3).ToArray(), new[] { 0, 2, 3 }, new[] { 0, 3, 4 }, new[] { 0, 4, 1 } }.Select(x => x.Select(y => cubeFaces[cubeFaceIxes[y]]).ToArray()).Any(puzzle.CheckVertex))
             {
                 Log($"[Painting Cube #{moduleId}] The current orientation of the cube has the correct vertex. Solved!");
                 StartCoroutine(Solve());
