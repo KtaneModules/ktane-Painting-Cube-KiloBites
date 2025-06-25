@@ -1,21 +1,21 @@
 fileFormatVersion: 2
-guid: ff633e258536d8b4fb5dc65971ed6cdc
+guid: 80757a57d167374449437465e5d124b3
 ModelImporter:
   serializedVersion: 22
   fileIDToRecycleName:
     100000: Socket
     100002: //RootNode
-    100004: SquareAreaHL
+    100004: ColorRegion
     400000: Socket
     400002: //RootNode
-    400004: SquareAreaHL
+    400004: ColorRegion
     2100000: SocketMat
     2300000: Socket
-    2300002: SquareAreaHL
+    2300002: ColorRegion
     3300000: Socket
-    3300002: SquareAreaHL
+    3300002: ColorRegion
     4300000: Socket
-    4300002: SquareAreaHL
+    4300002: ColorRegion
   externalObjects: {}
   materials:
     importMaterials: 0

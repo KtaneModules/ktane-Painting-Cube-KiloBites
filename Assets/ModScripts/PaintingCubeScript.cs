@@ -19,6 +19,7 @@ public class PaintingCubeScript : MonoBehaviour
 
     public Transform cube;
     public MeshRenderer[] cubeFaceRenders;
+    public MeshRenderer[] colorRegions;
 
     static int moduleIdCounter = 1;
     int moduleId;
@@ -54,7 +55,7 @@ public class PaintingCubeScript : MonoBehaviour
         new Color(0.5f, 0, 0.5f)
     };
 
-    private static readonly Color32 gridBorderColor = new Color32(141, 159, 194, 255);
+    private static readonly Color32 backgroundColor = new Color32(88, 98, 113, 255);
 
     private static readonly int[][] cubeOrientationTable =
     {
@@ -127,7 +128,7 @@ public class PaintingCubeScript : MonoBehaviour
     {
         for (int i = 0; i < 16; i++)
         {
-            gridButtons[i].GetComponent<MeshRenderer>().material.color = grid[i]?.MatColor ?? gridBorderColor;
+            colorRegions[i].material.color = grid[i]?.MatColor ?? backgroundColor;
             gridButtons[i].GetComponentInChildren<TextMesh>().text = cbActive ? grid[i]?.Color.ToString()[0].ToString() ?? string.Empty : string.Empty;
         }
 
@@ -322,7 +323,7 @@ public class PaintingCubeScript : MonoBehaviour
     {
         yield return null;
 
-        var renders = gridButtons.Select(x => x.GetComponent<MeshRenderer>()).ToArray();
+        var renders = colorRegions.ToArray();
 
         var ixOrder = new[] { 0, 1, 2, 3, 7, 11, 15, 14, 13, 12, 8, 4, 5, 6, 10, 9 };
 
@@ -344,7 +345,7 @@ public class PaintingCubeScript : MonoBehaviour
         yield return new WaitForSeconds(0.05f);
 
         foreach (var render in renders)
-            render.material.color = gridBorderColor;
+            render.material.color = backgroundColor;
 
         yield return new WaitForSeconds(0.05f);
 

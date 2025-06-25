@@ -5,12 +5,17 @@ ModelImporter:
   fileIDToRecycleName:
     100000: Socket
     100002: //RootNode
+    100004: SquareArea
     400000: Socket
     400002: //RootNode
+    400004: SquareArea
     2100000: SocketMat
     2300000: Socket
+    2300002: SquareArea
     3300000: Socket
+    3300002: SquareArea
     4300000: Socket
+    4300002: SquareArea
   externalObjects: {}
   materials:
     importMaterials: 0
