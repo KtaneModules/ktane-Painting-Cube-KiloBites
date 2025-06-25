@@ -245,7 +245,17 @@ public class PaintingCubeScript : MonoBehaviour
             SetGrid();
             SetCube();
 
-            if (new[] { Enumerable.Range(0, 3).ToArray(), new[] { 0, 2, 3 }, new[] { 0, 3, 4 }, new[] { 0, 4, 1 } }.Select(x => x.Select(y => cubeFaces[cubeFaceIxes[y]]).ToArray()).Any(puzzle.CheckVertex))
+            var corners = new[]
+            {
+                Enumerable.Range(0, 3).ToArray(),
+                new[] { 0, 2, 3 },
+                new[] { 0, 3, 4 },
+                new[] { 0, 4, 1 },
+                new[] { 3, 4, 0 },
+                new[] { 3, 0, 2 }
+            }.Select(x => x.Select(y => cubeFaces[cubeFaceIxes[y]]).ToArray()).ToArray();
+
+            if (corners.Any(puzzle.CheckVertex))
             {
                 Log($"[Painting Cube #{moduleId}] The current orientation of the cube has the correct vertex. Solved!");
                 StartCoroutine(Solve());
@@ -437,17 +447,24 @@ public class PaintingCubeScript : MonoBehaviour
         while (cubeMoving != null)
             yield return true;
 
+        reset:
+
         if (currentCubePos != startingCubePos)
         {
             reset.OnInteract();
             yield return new WaitForSeconds(0.1f);
         }
 
+
+
         for (int i = makeMoves.Count - 1; i >= 0; i--)
         {
             gridButtons[makeMoves[i].Position].OnInteract();
             yield return new WaitUntil(() => cubeMoving == null);
         }
+
+        if (!moduleSolved)
+            goto reset;
     }
 
 
