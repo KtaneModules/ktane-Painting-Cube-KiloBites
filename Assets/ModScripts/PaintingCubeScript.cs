@@ -65,6 +65,20 @@ public class PaintingCubeScript : MonoBehaviour
         new[] { 2, 1, 5, 3, 0, 4 }
     };
 
+    private static readonly int[][] corners =
+    {
+        Enumerable.Range(0, 3).ToArray(),
+        new[] { 0, 2, 3 },
+        new[] { 0, 3, 4 },
+        new[] { 0, 4, 1 },
+        new[] { 3, 4, 0 },
+        new[] { 3, 0, 2 },
+        new[] { 1, 5, 2 },
+        new[] { 2, 5, 3 },
+        new[] { 3, 5, 4 },
+        new[] { 4, 5, 1 }
+    };
+
     private Vector3 ObtainGridPos(int cubePos)
     {
         var unmodified = gridButtons[cubePos].transform.localPosition;
@@ -246,17 +260,7 @@ public class PaintingCubeScript : MonoBehaviour
             SetGrid();
             SetCube();
 
-            var corners = new[]
-            {
-                Enumerable.Range(0, 3).ToArray(),
-                new[] { 0, 2, 3 },
-                new[] { 0, 3, 4 },
-                new[] { 0, 4, 1 },
-                new[] { 3, 4, 0 },
-                new[] { 3, 0, 2 }
-            }.Select(x => x.Select(y => cubeFaces[cubeFaceIxes[y]]).ToArray()).ToArray();
-
-            if (corners.Any(puzzle.CheckVertex))
+            if (corners.Select(x => x.Select(y => cubeFaces[cubeFaceIxes[y]]).ToArray()).Any(puzzle.CheckVertex))
             {
                 Log($"[Painting Cube #{moduleId}] The current orientation of the cube has the correct vertex. Solved!");
                 StartCoroutine(Solve());
@@ -443,12 +447,8 @@ public class PaintingCubeScript : MonoBehaviour
     {
         yield return null;
 
-        var makeMoves = puzzle.TrackedDirections.ToList();
-
         while (cubeMoving != null)
             yield return true;
-
-        reset:
 
         if (currentCubePos != startingCubePos)
         {
@@ -458,14 +458,6 @@ public class PaintingCubeScript : MonoBehaviour
 
 
 
-        for (int i = makeMoves.Count - 1; i >= 0; i--)
-        {
-            gridButtons[makeMoves[i].Position].OnInteract();
-            yield return new WaitUntil(() => cubeMoving == null);
-        }
-
-        if (!moduleSolved)
-            goto reset;
     }
 
 
