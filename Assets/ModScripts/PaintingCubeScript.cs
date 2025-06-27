@@ -67,7 +67,7 @@ public class PaintingCubeScript : MonoBehaviour
 
 
     private static readonly int[][] corners = 
-        {
+    {
         new[] { 0, 1, 2 },
         new[] { 1, 2, 0 },
         new[] { 2, 0, 1 },
