@@ -17,7 +17,10 @@ MonoBehaviour:
   description: 'They put colors in the water that turn the freaking cubes gay!
 
 
-    Move a cube to fill the faces with specific colors on a vertex.'
+    Move a cube to fill the faces with an arrangement of colors on a vertex.
+
+
+    This module is an entry for 2025''s Modder Secret Santa event.'
   version: 1
   outputFolder: build
-  previewImage: {fileID: 0}
+  previewImage: {fileID: 2800000, guid: db75df78f9e6d6f48bdcb015bf1fa556, type: 3}

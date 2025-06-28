@@ -4,7 +4,7 @@ using System.Linq;
 using static UnityEngine.Random;
 
 
-public struct OrientedCube : IEquatable<OrientedCube>
+public struct OrientedCube
 {
     public ColorInfo[] CurrentCube { get; set; }
     public ColorInfo[] CurrentGrid { get; set; }
@@ -18,11 +18,6 @@ public struct OrientedCube : IEquatable<OrientedCube>
         CurrentOrientation = currentOrientation;
         CurrentPosition = currentPosition;
     }
-
-    public bool Equals(OrientedCube other) => CurrentCube.SequenceEqual(other.CurrentCube) && CurrentGrid.SequenceEqual(other.CurrentGrid) && CurrentOrientation.SequenceEqual(other.CurrentOrientation) && CurrentPosition == other.CurrentPosition;
-
-    public override bool Equals(object obj) => obj is OrientedCube && Equals((OrientedCube)obj);
-    public override int GetHashCode() => 7 * CurrentPosition;
 }
 
 public class PaintingCubePuzzle
@@ -37,6 +32,8 @@ public class PaintingCubePuzzle
 
     private readonly ColorInfo[] tempCube = new ColorInfo[6];
     public ColorInfo[] Grid;
+    public int StartingPos;
+    public List<DirectionInfo> GetTrackings;
 
     public bool CheckVertex(ColorInfo[] vertex) => Enumerable.Range(0, 3).Select(x => tempCube[x]).SequenceEqual(vertex);
 
@@ -62,6 +59,8 @@ public class PaintingCubePuzzle
 
 
     private List<ColorInfo[]> gridCandidates = new List<ColorInfo[]>();
+    private List<int> startingPosCandidates = new List<int>();
+    private List<List<DirectionInfo>> trackingCandidates = new List<List<DirectionInfo>>();
 
     void GenerateCube(MonoRandom ruleSeeder)
     {
@@ -116,6 +115,8 @@ public class PaintingCubePuzzle
         var randomCandidate = Range(0, gridCandidates.Count);
 
         Grid = gridCandidates[randomCandidate];
+        StartingPos = startingPosCandidates[randomCandidate];
+        GetTrackings = trackingCandidates[randomCandidate];
     }
 
     void GeneratePuzzle()
@@ -130,6 +131,8 @@ public class PaintingCubePuzzle
             { CubeDirection.Left, CubeDirection.Right }
         };
 
+        DirectionInfo prev = null;
+
         while (goalQueue.Count > 0)
         {
             var goal = goalQueue.Dequeue();
@@ -140,10 +143,10 @@ public class PaintingCubePuzzle
 
             while (true)
             {
-                if (cube.CurrentCube.All(x => x == null) || trackedCandidates.Count > 100)
+                if (cube.CurrentCube.All(x => x == null) || trackedCandidates.Count > 40)
                     break;
 
-                var randomMove = DirectionInfo.GetValidDirections(cube.CurrentPosition).Where(x => x != null).PickRandom();
+                var randomMove = DirectionInfo.GetValidDirections(cube.CurrentPosition).Where(x => x != null).Where(x => prev?.Direction != x.Direction).PickRandom();
 
                 trackedCandidates.Add(new DirectionInfo(oppositeDir[randomMove.Direction], cube.CurrentPosition));
 
@@ -159,17 +162,20 @@ public class PaintingCubePuzzle
                 }
 
                 cube.CurrentPosition = randomMove.Position;
+                prev = randomMove;
                 var orientation = cube.CurrentOrientation.ToArray();
                 cube.CurrentOrientation = cubeOrientationTable[(int)randomMove.Direction].Select(x => orientation[x]).ToArray();
             }
 
-            if (trackedCandidates.Count > 100)
+            if (trackedCandidates.Count > 40 || cube.CurrentGrid[cube.CurrentPosition] != null || !IsValid(trackedCandidates, cube.CurrentGrid.ToArray(), cube.CurrentPosition))
+            {
+                prev = null;
                 continue;
-
-            if (cube.CurrentGrid[cube.CurrentPosition] != null || !IsValid(trackedCandidates, cube.CurrentGrid.ToArray(), cube.CurrentPosition))
-                continue;
+            }
 
             gridCandidates.Add(cube.CurrentGrid.ToArray());
+            startingPosCandidates.Add(cube.CurrentPosition);
+            trackingCandidates.Add(trackedCandidates);
         }
 
         if (gridCandidates.Count == 0)

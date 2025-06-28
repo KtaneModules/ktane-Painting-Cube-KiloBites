@@ -2,7 +2,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using UnityEngine;
 using static UnityEngine.Debug;
 using static UnityEngine.Random;
@@ -101,8 +100,6 @@ public class PaintingCubeScript : MonoBehaviour
         new[] { 4, 5, 1 }
     };
 
-    private Thread thread;
-
 
     private Vector3 ObtainGridPos(int cubePos)
     {
@@ -137,7 +134,7 @@ public class PaintingCubeScript : MonoBehaviour
         puzzle = new PaintingCubePuzzle(missingColor, Enumerable.Range(0, 7).Select(x => new ColorInfo((PCColor) x, faceColors[x])).ToArray(), RuleSeedable.GetRNG());
 
         grid = puzzle.Grid.ToArray();
-        currentCubePos = startingCubePos = Enumerable.Range(0, 16).Where(x => grid[x] == null).PickRandom();
+        currentCubePos = startingCubePos = puzzle.StartingPos;
         initialGrid = grid.ToArray();
 
         SetGrid();
@@ -156,15 +153,6 @@ public class PaintingCubeScript : MonoBehaviour
         Log($"[Painting Cube #{moduleId}] The missing color from the grid is: {missingColor}. The correct vertex to use is: {puzzle.ObtainVertex()}");
         Log($"[Painting Cube #{moduleId}] The initial grid is: {puzzle.ObtainGrid()}");
         Log($"[Painting Cube #{moduleId}] The cube's starting position is at {"ABCD"[startingCubePos % 4]}{(startingCubePos / 4) + 1}");
-    }
-
-    private void OnDestroy()
-    {
-        if (thread == null)
-            return;
-
-        thread.Interrupt();
-        thread = null;
     }
 
     void SetGrid()
@@ -403,7 +391,7 @@ public class PaintingCubeScript : MonoBehaviour
 
 
 #pragma warning disable 414
-    private readonly string TwitchHelpMessage = @"!{0} move urdl to move the cube that many directions || !{0} cb to toggle colorblind || !{0} reset to reset the module back to its initial state";
+    private readonly string TwitchHelpMessage = @"!{0} move urdl to move the cube that many directions || !{0} cb / colorblind to toggle colorblind || !{0} reset to reset the module back to its initial state";
 #pragma warning restore 414
 
     IEnumerator ProcessTwitchCommand(string command)
@@ -411,7 +399,7 @@ public class PaintingCubeScript : MonoBehaviour
         string[] split = command.ToUpperInvariant().Split(new[] { " " }, StringSplitOptions.RemoveEmptyEntries);
         yield return null;
 
-        if ("CB".ContainsIgnoreCase(split[0]))
+        if (new[] { "CB", "COLORBLIND" }.Any(x => x.ContainsIgnoreCase(split[0])))
         {
             cbActive = !cbActive;
             SetCube();
@@ -468,23 +456,6 @@ public class PaintingCubeScript : MonoBehaviour
         }
     }
 
-    // Autosolver is currently a WIP. I'll just leave it alone for now until someone can help implement this.
-    // Theoretically it does need a BFS algorithm. However, I am pretty much stuck with what's needed at the moment.
-
-    private struct QueueInfo
-    {
-        public OrientedCube CubeState;
-        public OrientedCube? ParentState;
-        public DirectionInfo DirInfo;
-
-        public QueueInfo(OrientedCube cubeState, OrientedCube? parentState, DirectionInfo dirInfo)
-        {
-            CubeState = cubeState;
-            ParentState = parentState;
-            DirInfo = dirInfo;
-        }
-    }
-
     IEnumerator TwitchHandleForcedSolve()
     {
         yield return null;
@@ -498,111 +469,11 @@ public class PaintingCubeScript : MonoBehaviour
             yield return new WaitForSeconds(0.1f);
         }
 
-        DirectionInfo prev;
-        OrientedCube? goal = null;
-
-        var threadDone = false;
-
-        var visited = new Dictionary<OrientedCube, QueueInfo>();
-
-        thread = new Thread(() =>
-        {
-            var q = new Queue<QueueInfo>();
-
-            q.Enqueue(new QueueInfo(new OrientedCube(new ColorInfo[6], initialGrid.ToArray(), Enumerable.Range(0, 6).ToArray(), startingCubePos), null, null));
-
-            var oppositeDir = new Dictionary<CubeDirection, CubeDirection>
-            {
-                { CubeDirection.Up, CubeDirection.Down },
-                { CubeDirection.Right, CubeDirection.Left },
-                { CubeDirection.Down, CubeDirection.Up },
-                { CubeDirection.Left, CubeDirection.Right }
-            };
-
-
-
-            while (q.Count > 0)
-            {
-                var qi = q.Dequeue();
-                prev = qi.DirInfo;
-
-                if (visited.ContainsKey(qi.CubeState))
-                    continue;
-                    
-
-                visited[qi.CubeState] = qi;
-
-                if (qi.CubeState.CurrentCube.All(x => x != null) && corners.Select(x => x.Select(y => qi.CubeState.CurrentCube[qi.CubeState.CurrentOrientation[y]]).ToArray()).Any(puzzle.CheckVertex))
-                {
-                    goal = qi.CubeState;
-                    threadDone = true;
-                    return;
-                }
-
-                var dirs = DirectionInfo.GetValidDirections(qi.CubeState.CurrentPosition);
-
-                foreach (var dir in dirs)
-                {
-                    if (dir == null)
-                        continue;
-
-                    if (prev != null)
-                        if (oppositeDir[prev.Direction] == dir.Direction)
-                            continue;
-
-                    var modifiedCube = qi.CubeState.CurrentCube.ToArray();
-                    var modifiedGrid = qi.CubeState.CurrentGrid.ToArray();
-                    var currentOrientation = qi.CubeState.CurrentOrientation.ToArray();
-
-                    if (modifiedGrid[qi.CubeState.CurrentPosition] == null && modifiedCube[qi.CubeState.CurrentOrientation[5]] != null)
-                    {
-                        modifiedGrid[qi.CubeState.CurrentPosition] = modifiedCube[qi.CubeState.CurrentOrientation[5]];
-                        modifiedCube[qi.CubeState.CurrentOrientation[5]] = null;
-                    }
-                    else if (modifiedGrid[qi.CubeState.CurrentPosition] != null && modifiedCube[qi.CubeState.CurrentOrientation[5]] == null)
-                    {
-                        modifiedCube[qi.CubeState.CurrentOrientation[5]] = modifiedGrid[qi.CubeState.CurrentPosition];
-                        modifiedGrid[qi.CubeState.CurrentPosition] = null;
-                    }
-
-                    var newOrientation = cubeOrientationTable[(int)dir.Direction].Select(x => currentOrientation[x]).ToArray();
-
-                    if (qi.CubeState.CurrentCube.Count(x => x != null) == 5 && qi.CubeState.CurrentCube[newOrientation[5]] == null && qi.CubeState.CurrentGrid[dir.Position] != null)
-                    {
-                        modifiedCube[newOrientation[5]] = modifiedGrid[dir.Position];
-                        modifiedGrid[dir.Position] = null;
-                    }
-
-                    q.Enqueue(new QueueInfo(new OrientedCube(modifiedCube.ToArray(), modifiedGrid.ToArray(), newOrientation.ToArray(), dir.Position), qi.CubeState, dir));
-                }
-            }
-
-            throw new InvalidOperationException("The cube is not solvable!");
-        });
-
-        thread.Start();
-
-        while (!threadDone)
-            yield return true;
-        
-
-        var r = goal.Value;
-        var path = new List<int>();
-
-        while (true)
-        {
-            var nr = visited[r];
-
-            if (nr.ParentState == null)
-                break;
-
-            path.Add(nr.DirInfo.Position);
-            r = nr.ParentState.Value;
-        }
+        var path = puzzle.GetTrackings;
 
         for (int i = path.Count - 1; i >= 0; i--)
         {
-            gridButtons[path[i]].OnInteract();
+            gridButtons[path[i].Position].OnInteract();
             yield return new WaitUntil(() => cubeMoving == null);
         }
 
