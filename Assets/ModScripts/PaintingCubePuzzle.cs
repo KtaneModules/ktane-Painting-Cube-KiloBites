@@ -173,6 +173,8 @@ public class PaintingCubePuzzle
                 continue;
             }
 
+            prev = null;
+
             gridCandidates.Add(cube.CurrentGrid.ToArray());
             startingPosCandidates.Add(cube.CurrentPosition);
             trackingCandidates.Add(trackedCandidates);
